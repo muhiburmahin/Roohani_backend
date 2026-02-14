@@ -1,0 +1,83 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model Product {
+  id          String   @id @default(uuid())
+  name        String
+  description String?
+  sizes       String[] 
+  price       Float
+  stock       Int      @default(0)
+  imageUrl    String?
+
+  categoryId  String
+  category    Category @relation(fields: [categoryId], references: [id])
+
+  orderItems  OrderItem[]
+  
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([name])
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  customerName    String
+  customerId      String
+  //customer        User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
+
+  status          OrderStatus @default(PENDING)
+  shippingAddress String
+  phone           String?
+  totalAmount     Float
+
+  items           OrderItem[]
+
+  createdAt       DateTime    @default(now())
+  updatedAt       DateTime    @updatedAt
+}
+
+model OrderItem {
+  id           String  @id @default(uuid())
+  orderId      String
+  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
+
+  productId    String  
+  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  quantity     Int
+  price        Float
+  selectedSize String? 
+
+  createdAt    DateTime @default(now())
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
