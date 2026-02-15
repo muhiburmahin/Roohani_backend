@@ -1,18 +1,43 @@
 import express from "express";
-import auth from "../../middleware/atth";
-import { Role } from "../../../generated/prisma/enums";
+import { auth } from "../../middleware/auth";
+import { Role } from "../../constants/user";
 import { orderController } from "./order.controller";
+
 const router = express.Router();
+router.get(
+    "/",
+    auth(Role.customer, Role.admin),
+    orderController.getOrders
+);
 
+router.get(
+    "/:id",
+    auth(Role.customer, Role.admin),
+    orderController.getSingleOrderById
+);
 
+router.post(
+    "/",
+    auth(Role.customer),
+    orderController.createOrder
+);
 
-router.get("/", auth(Role.CUSTOMER, Role.SELLER, Role.ADMIN), orderController.getOrders);
-router.get("/:id", auth(Role.CUSTOMER, Role.SELLER, Role.ADMIN), orderController.getSingleOrderById);
+router.patch(
+    "/update-status/:id",
+    auth(Role.admin),
+    orderController.updateStatus
+);
 
+router.delete(
+    "/:id",
+    auth(Role.admin),
+    orderController.deleteOrderById
+);
 
-router.post("/", auth(Role.CUSTOMER, Role.SELLER), orderController.createOrder);
+router.patch(
+    "/cancel/:id",
+    auth(Role.customer),
+    orderController.cancelOrder
+);
 
-router.patch("/update-status/:id", auth(Role.SELLER, Role.ADMIN), orderController.updateStatus);
-router.delete("/:id", auth(Role.ADMIN, Role.SELLER), orderController.deleteOrderById);
-
-export const orderRoutes = router; 
+export const orderRoutes = router;

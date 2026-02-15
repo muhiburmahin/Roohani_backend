@@ -1,7 +1,11 @@
 import express, { Request, Response } from "express";
-//import { toNodeHandler } from "better-auth/node";
+import { toNodeHandler } from "better-auth/node";
 import cors from "cors";
 import { categoryRoute } from "./modules/category/category.route";
+import { productRoute } from "./modules/product/product.route";
+import { auth } from "./lib/auth";
+import { orderRoutes } from "./modules/order/order.route";
+import { userRoutes } from "./modules/user/user.route";
 
 const app = express();
 
@@ -32,7 +36,7 @@ app.use(cors({
 }))
 
 app.use(express.json());
-//app.all("/api/auth/*splat", toNodeHandler(auth));
+app.all("/api/auth/*splat", toNodeHandler(auth));
 
 
 app.get("/", (request: Request, respons: Response) => {
@@ -42,15 +46,11 @@ app.get("/", (request: Request, respons: Response) => {
 
 app.use("/api/category", categoryRoute);
 
-// app.use("/api/medicines", medicineRoute);
-// app.use("/api/seller/medicines", medicineRoute);
+app.use("/api/product", productRoute);
 
-// app.use("/api/orders", orderRoutes);
-// app.use("/api/seller/orders", orderRoutes)
+app.use("/api/order", orderRoutes);
 
-// app.use("/api/analytics", analyticsRoutes);
-// app.use("/api/review", reviewRoutes);
-// app.use("/api", userRoutes);
+app.use("/api/user", userRoutes);
 
 
 export default app;

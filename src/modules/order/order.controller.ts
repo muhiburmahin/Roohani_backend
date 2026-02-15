@@ -4,8 +4,12 @@ import { AppError } from "../../middleware/appError";
 
 const createOrder = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = req.user!.id;
-        if (!userId) throw new AppError("Unauthorized", 401);
+        const userId = req.user?.id;
+
+        if (!userId) {
+            throw new AppError("Authentication required to place an order", 401);
+        }
+
         const result = await orderService.createOrder(userId, req.body);
 
         res.status(201).json({
@@ -19,90 +23,117 @@ const createOrder = async (req: Request, res: Response, next: NextFunction) => {
     }
 };
 
-
 const getOrders = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const userId = req.user?.id;
-        const userRole = req.user!.role;
-        const path = req.originalUrl;
+        const userRole = req.user?.role;
 
-        if (!userId) throw new AppError("Unauthorized", 401);
-        let result;
+        if (!userId || !userRole) {
+            throw new AppError("Unauthorized access", 401);
+        }
 
-        if (path.includes("seller") && userRole === "SELLER") {
-            result = await orderService.getSellerOrders(userId!);
-        }
-        else {
-            result = await orderService.getMyOrders(userId!);
-        }
+        const result = await orderService.getMyOrders(userId, userRole);
 
         res.status(200).json({
             success: true,
-            message: "Orders get successfully!",
+            message: "Orders fetched successfully!",
+            count: result.length,
             data: result
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
 
 const getSingleOrderById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const orderId = req.params.id;
+        const { id: orderId } = req.params;
+        const userId = req.user?.id;
+        const userRole = req.user?.role;
 
-        const result = await orderService.getSingleOrderById(orderId as string);
+        if (!userId || !userRole) {
+            throw new AppError("Login required to view order details", 401);
+        }
+
+        const result = await orderService.getSingleOrderById(
+            orderId as string,
+            userId,
+            userRole
+        );
 
         res.status(200).json({
             success: true,
-            message: "Order Get successfully!",
+            message: "Order details retrieved securely",
             data: result
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
 
-//update status
+
 const updateStatus = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { id } = req.params;
+        const { id: orderId } = req.params;
         const { status } = req.body;
-        const userId = req.user!.id;
-        const userRole = req.user!.role;
 
-        const result = await orderService.updateOrderStatus(id as string, status, userId, userRole);
+        if (!status) {
+            throw new AppError("New status is required to update", 400);
+        }
+
+        const result = await orderService.updateOrderStatus(orderId as string, status);
 
         res.status(200).json({
             success: true,
-            message: `Order status updated to successfully!`,
+            message: `Order status successfully updated to ${status}`,
             data: result
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
+
 
 const deleteOrderById = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const { id } = req.params;
-        const result = await orderService.deleteOrderById(id as string);
+        const { id: orderId } = req.params;
+
+        const result = await orderService.deleteOrderById(orderId as string);
+
         res.status(200).json({
             success: true,
-            message: "Order deleted successfully",
-            data: result,
+            message: "Order has been permanently removed from records",
+            data: result
         });
-    } catch (error: any) {
+    } catch (error) {
         next(error);
     }
 };
+
+const cancelOrder = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id: orderId } = req.params;
+        const userId = req.user!.id;
+
+        const result = await orderService.cancelOrder(orderId as string, userId);
+
+        res.status(200).json({
+            success: true,
+            message: "Your order has been cancelled and stock has been updated",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
+
+
 
 export const orderController = {
     createOrder,
     getOrders,
     getSingleOrderById,
     updateStatus,
-    deleteOrderById
+    deleteOrderById,
+    cancelOrder,
 };

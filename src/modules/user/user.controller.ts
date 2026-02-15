@@ -1,104 +1,106 @@
 import { Request, Response, NextFunction } from "express";
 import { userService } from "./user.service";
-import { prisma } from "../../lib/prisma";
-import { AppError } from "../../middleware/appError";
-import { User } from "../../../generated/prisma/client";
+import { Role } from "../../constants/user";
 
-
+/**
+ * 1. Get Logged-in User's Profile
+ */
 const getMyProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const userId = req.user!.id;
+        const userId = req.user!.id; // Retrieved from auth middleware
+
         const result = await userService.getMyProfile(userId);
 
         res.status(200).json({
             success: true,
-            message: "Profile retrieved successfully!",
+            message: "Profile retrieved successfully",
             data: result
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
 
-//Get All Users
+/**
+ * 2. Get All Users (Admin Only)
+ */
 const getAllUsers = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const result = await userService.getAllUsers();
 
         res.status(200).json({
             success: true,
-            message: "All users retrieved successfully!",
+            message: "All users fetched successfully",
+            count: result.length,
             data: result
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
+
+/**
+ * 3. Get Admin Dashboard Statistics (Admin Only)
+ */
 const adminStats = async (req: Request, res: Response, next: NextFunction) => {
     try {
         const result = await userService.adminStats();
+
         res.status(200).json({
             success: true,
-            message: "Admin stats fetched successfully!",
-            data: result,
+            message: "Admin dashboard statistics retrieved",
+            data: result
         });
-    } catch (error: any) {
+    } catch (error) {
         next(error);
     }
 };
 
-const sellerStats = async (req: Request, res: Response, next: NextFunction) => {
-    try {
-        const result = await userService.sellerStats();
-        res.status(200).json({
-            success: true,
-            message: "Seller stats fetched successfully!",
-            data: result,
-        });
-    } catch (error: any) {
-        next(error);
-    }
-};
-
+/**
+ * 4. Get Customer Specific Statistics (Customer Only)
+ */
 const customerStats = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const user = req.user;
-        const result = await userService.customerStats(user as Partial<User>);
+        const userId = req.user!.id;
+
+        const result = await userService.customerStats(userId);
+
         res.status(200).json({
             success: true,
-            message: "Customer stats fetched successfully!",
-            data: result,
+            message: "Customer order summary retrieved",
+            data: result
         });
-    } catch (error: any) {
+    } catch (error) {
         next(error);
     }
-}
+};
 
-
+/**
+ * 5. Update User Profile
+ */
 const updateProfile = async (req: Request, res: Response, next: NextFunction) => {
     try {
-        const targetId = req.params.id || req.user!.id;
+        const userId = req.user!.id;
         const userRole = req.user!.role;
+        const paramId = req.params.id;
 
-        if (userRole !== 'ADMIN') {
-            delete req.body.role;
-            delete req.body.email;
-            if (req.params.id && req.params.id !== req.user!.id) {
-                throw new AppError("You can only update your own profile!", 403);
-            }
+        let targetId = paramId || userId;
+
+        if (userRole !== Role.admin && paramId && paramId !== userId) {
+            return res.status(403).json({
+                success: false,
+                message: "You are not authorized to update this profile!"
+            });
         }
 
         const result = await userService.updateProfile(targetId as string, req.body);
 
         res.status(200).json({
             success: true,
-            message: "Profile updated successfully!",
+            message: "Profile updated successfully",
             data: result
         });
-    }
-    catch (error) {
+    } catch (error) {
         next(error);
     }
 };
@@ -107,8 +109,6 @@ export const userController = {
     getMyProfile,
     getAllUsers,
     adminStats,
-    sellerStats,
     customerStats,
     updateProfile
-
 };

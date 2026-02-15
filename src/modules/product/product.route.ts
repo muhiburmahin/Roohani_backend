@@ -1,18 +1,24 @@
-// import express from "express";
-// import auth from "../../middleware/atth";
-// import { Role } from "../../../generated/prisma/enums";
-// import { medicineController } from "./product.controller";
-// const router = express.Router();
+import express from "express";
+import { productController } from "./product.controller";
+import { auth } from "../../middleware/auth";
+import { Role } from "../../constants/user";
+import validateRequest from "../../middleware/validateRequest";
+import { ProductValidation } from "./product.validation";
 
-// router.get("/", medicineController.getAllMedicines);
-// router.get("/:id", medicineController.getMedicineById);
+const router = express.Router();
 
-// router.post("/", auth(Role.SELLER, Role.ADMIN), medicineController.createMedicine);
+router.get("/", productController.getAllProducts);
+router.get("/:id", productController.getProductById);
+router.post(
+    "/",
+    auth(Role.admin),
+    validateRequest(ProductValidation.createProductSchema),
+    productController.createProduct
+);
+router.patch("/:id", auth(Role.admin), productController.updateProductById);
+router.delete("/:id", auth(Role.admin), productController.deleteProductById);
+
+export const productRoute = router;
 
 
-// router.patch("/:id", auth(Role.SELLER, Role.ADMIN), medicineController.updateMedicineById);
 
-// router.delete("/:id", auth(Role.SELLER, Role.ADMIN), medicineController.deleteMedicineById);
-
-
-// export const medicineRoute = router;

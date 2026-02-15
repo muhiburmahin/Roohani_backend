@@ -1,114 +1,87 @@
-// import { NextFunction, Request, Response } from "express";
-// import { medicineService } from "./product.service";
-// import { AppError } from "../../middleware/appError";
-// import { calculatePagination } from "../../helpers/paginationHelper"
-// import { ParsedQs } from "qs";
+import { NextFunction, Request, Response } from "express";
+import { AppError } from "../../middleware/appError";
+import { productService } from "./product.service";
 
-// function pick(query: ParsedQs, fields: string[]): Record<string, any> {
-//     const result: Record<string, any> = {};
-//     fields.forEach(field => {
-//         if (query[field] !== undefined) {
-//             result[field] = query[field];
-//         }
-//     });
-//     return result;
-// }
+const createProduct = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const adminId = req.user?.id;
+        if (!adminId) {
+            throw new AppError("You must be logged in as admin to add products", 401);
+        }
 
-// const createMedicine = async (req: Request, res: Response, next: NextFunction) => {
-//     try {
-//         const medicineData = req.body;
-//         const sellerId = req.user?.id;
-//         if (!sellerId) {
-//             throw new AppError("You must be logged in to add medicine", 401);
-//         }
-//         const result = await medicineService.createMedicine({
-//             ...medicineData, sellerId
-//         });
-//         res.status(201).json({
-//             success: true,
-//             message: "Medicine created!",
-//             data: result
-//         });
-//     }
-//     catch (error: any) {
-//         next(error);
-//     }
-// };
+        const result = await productService.createProduct(req.body, adminId);
 
-// const getAllMedicines = async (req: Request, res: Response, next: NextFunction) => {
-//     try {
-//         const filters = pick(req.query, ['search', 'categoryId']);
+        res.status(201).json({
+            success: true,
+            message: "Product added to Roohani collection!",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
-//         const options = pick(req.query, ['page', 'limit', 'sortBy', 'sortOrder']);
+const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await productService.getAllProducts(req.query);
+        res.status(200).json({
+            success: true,
+            message: "All products retrieved successfully",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
-//         const result = await medicineService.getAllMedicines(filters, options);
+const getProductById = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const result = await productService.getProductById(req.params.id as string);
+        res.status(200).json({
+            success: true,
+            message: "Product details retrieved",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
-//         res.status(200).json({
-//             success: true,
-//             statusCode: 200,
-//             message: "Medicines retrieved successfully",
-//             meta: result.meta,
-//             data: result.data
-//         });
-//     }
-//     catch (error) {
-//         next(error);
-//     }
-// };
 
-// const getMedicineById = async (req: Request, res: Response, next: NextFunction) => {
-//     try {
-//         const result = await medicineService.getMedicineById(req.params.id as string);
-//         res.status(200).json({
-//             success: true,
-//             message: "Medicines get successfully!",
-//             data: result
-//         });
-//     }
-//     catch (error) {
-//         next(error);
-//     }
-// };
+const updateProductById = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        const result = await productService.updateProductById(id as string, req.body);
 
-// const updateMedicineById = async (req: Request, res: Response, next: NextFunction) => {
-//     try {
-//         const medicineId = req.params.id;
-//         const userId = req.user!.id;
-//         const userRole = req.user!.role;
-//         const result = await medicineService.updateMedicineById(medicineId as string, userId, userRole, req.body);
-//         res.status(200).json({
-//             success: true,
-//             message: "Medicine updated!",
-//             data: result
-//         });
-//     }
-//     catch (error) {
-//         next(error);
-//     }
-// };
+        res.status(200).json({
+            success: true,
+            message: "Roohani product updated successfully!",
+            data: result
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
-// const deleteMedicineById = async (req: Request, res: Response, next: NextFunction) => {
-//     try {
-//         const medicineId = req.params.id;
-//         const userId = req.user!.id;
-//         const userRole = req.user!.role;
+const deleteProductById = async (req: Request, res: Response, next: NextFunction) => {
+    try {
+        const { id } = req.params;
+        await productService.deleteProductById(id as string);
 
-//         await medicineService.deleteMedicineById(medicineId as string, userId, userRole);
-//         res.status(200).json({
-//             success: true,
-//             message: "Medicine deleted successfully!"
-//         });
-//     }
-//     catch (error) {
-//         next(error);
-//     }
-// };
+        res.status(200).json({
+            success: true,
+            message: "Product removed from Roohani collection!",
+            data: null
+        });
+    } catch (error) {
+        next(error);
+    }
+};
 
-// export const medicineController = {
-//     createMedicine,
-//     getAllMedicines,
-//     getMedicineById,
-//     updateMedicineById,
-//     deleteMedicineById,
-// };
-
+export const productController = {
+    createProduct,
+    getAllProducts,
+    getProductById,
+    updateProductById,
+    deleteProductById
+};

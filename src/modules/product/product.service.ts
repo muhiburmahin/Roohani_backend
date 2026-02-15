@@ -1,202 +1,131 @@
-// import { medicine, Prisma } from "../../../generated/prisma/client";
-// import { paginationHelpers, IOptions } from "../../helpers/paginationHelper";
-// import { prisma } from "../../lib/prisma";
-// import { AppError } from "../../middleware/appError";
+import { prisma } from "../../lib/prisma";
+import { AppError } from "../../middleware/appError";
+import { paginationHelper } from "../../utils/paginationHelper";
 
-// const createMedicine = async (payload: medicine) => {
-//     const { name, description, price, stock, manufacturer, imageUrl, categoryId, sellerId,
-//     } = payload;
+const createProduct = async (payload: any, adminId: string) => {
+    const admin = await prisma.user.findUnique({
+        where: { id: adminId },
+    });
+    if (!admin) throw new AppError("Admin account not found", 404);
+    const category = await prisma.category.findUnique({
+        where: { id: payload.categoryId },
+    });
+    if (!category) throw new AppError("Invalid Category ID", 400);
+    const product = await prisma.product.create({
+        data: {
+            name: payload.name,
+            description: payload.description,
+            price: parseFloat(payload.price),
+            stock: parseInt(payload.stock),
+            sizes: payload.sizes || [],
+            imageUrl: payload.imageUrl,
+            categoryId: payload.categoryId,
+        },
+    });
 
-//     const seller = await prisma.user.findUnique({
-//         where: {
-//             id: sellerId
-//         },
-//     });
+    return product;
+};
 
-//     if (!seller) {
-//         throw new AppError("Seller not found", 404);
-//     }
+const getAllProducts = async (query: any) => {
+    const { search, categoryId, minPrice, maxPrice, ...options } = query;
 
-//     const category = await prisma.category.findUnique({
-//         where: {
-//             id: categoryId
-//         },
-//     });
+    const { page, limit, skip, sortBy, sortOrder } = paginationHelper.calculatePagination(options);
 
-//     if (!category) {
-//         throw new AppError("Category not found", 404);
-//     }
+    const whereConditions: any = {
+        AND: [
+            search ? {
+                OR: [
+                    { name: { contains: search, mode: 'insensitive' } },
+                    { description: { contains: search, mode: 'insensitive' } }
+                ]
+            } : {},
+            categoryId ? { categoryId } : {},
+            minPrice ? { price: { gte: parseFloat(minPrice) } } : {},
+            maxPrice ? { price: { lte: parseFloat(maxPrice) } } : {},
+        ]
+    };
 
-//     const medicine = await prisma.medicine.create({
-//         data: {
-//             name, description, price, stock,
-//             manufacturer, imageUrl, categoryId, sellerId,
-//         },
-//     });
+    const [products, totalCount] = await Promise.all([
+        prisma.product.findMany({
+            where: whereConditions,
+            skip,
+            take: limit,
+            include: { category: { select: { name: true } } },
+            orderBy: { [sortBy]: sortOrder }
+        }),
+        prisma.product.count({ where: whereConditions })
+    ]);
 
-//     return medicine;
-// };
+    return {
+        meta: {
+            page,
+            limit,
+            totalCount,
+            totalPages: Math.ceil(totalCount / limit)
+        },
+        data: products
+    };
+};
 
-// //Get all midisine
-// const getAllMedicines = async (
-//     filters: { search?: string; categoryId?: string },
-//     options: IOptions
-// ) => {
-//     const { search, categoryId } = filters;
-
-//     const { page, limit, skip, sortBy, sortOrder } = paginationHelpers.calculatePagination(options);
-
-//     const andConditions: Prisma.medicineWhereInput[] = [];
-
-//     if (search) {
-//         andConditions.push({
-//             OR: [
-//                 {
-//                     name:
-//                     {
-//                         contains: search,
-//                         mode: "insensitive"
-//                     }
-//                 },
-//                 {
-//                     description: {
-//                         contains: search,
-//                         mode: "insensitive"
-//                     }
-//                 },
-//                 {
-//                     manufacturer:
-//                     {
-//                         contains: search,
-//                         mode: "insensitive"
-//                     }
-//                 },
-//                 {
-//                     category: {
-//                         name: {
-//                             contains: search,
-//                             mode: "insensitive"
-//                         }
-//                     }
-//                 }
-//             ],
-//         });
-//     }
-
-//     if (categoryId) {
-//         andConditions.push({
-//             categoryId: categoryId
-//         });
-//     }
-
-//     const whereConditions: Prisma.medicineWhereInput = andConditions.length > 0
-//         ? { AND: andConditions }
-//         : {};
-
-//     const result = await prisma.medicine.findMany({
-//         where: whereConditions,
-//         take: limit,
-//         skip: skip,
-//         orderBy: {
-//             [sortBy]: sortOrder,
-//         },
-//         include: {
-//             category: {
-//                 select: {
-//                     id: true,
-//                     name: true
-//                 },
-//             },
-//             reviews: {
-//                 select: {
-//                     rating: true,
-//                     comment: true,
-//                 }
-//             }
-//         },
-//     });
-
-//     const total = await prisma.medicine.count({
-//         where: whereConditions,
-//     });
-
-//     return {
-//         meta: {
-//             total,
-//             page,
-//             limit,
-//             totalPages: Math.ceil(total / limit),
-//         },
-//         data: result,
-//     };
-// };
+const getProductById = async (id: string) => {
+    const product = await prisma.product.findUnique({
+        where: { id },
+        include: { category: true }
+    });
+    if (!product) throw new AppError("Product not found in Roohani inventory", 404);
+    return product;
+};
 
 
+const updateProductById = async (id: string, payload: Partial<any>) => {
+    const isProductExist = await prisma.product.findUnique({
+        where: { id }
+    });
 
-// const getMedicineById = async (id: string) => {
-//     return await prisma.medicine.findUniqueOrThrow({
-//         where: { id },
-//         include: {
-//             category: {
-//                 select: {
-//                     id: true,
-//                     name: true
-//                 },
-//             },
-//             seller: true,
-//         },
-//     });
-// };
+    if (!isProductExist) {
+        throw new AppError("Product not found to update!", 404);
+    }
 
-// const updateMedicineById = async (id: string, userId: string, userRole: string, payload: any) => {
-//     const medicine = await prisma.medicine.findFirstOrThrow({
-//         where: {
-//             id
-//         }
-//     });
-//     if (!medicine) throw new AppError("Medicine not found", 404);
+    const updateData: any = { ...payload };
 
-//     if (userRole !== 'ADMIN' && medicine.sellerId !== userId) {
-//         throw new AppError("Unauthorized! You can only update your own medicines", 403);
-//     }
+    if (payload.price !== undefined) {
+        updateData.price = parseFloat(payload.price as string);
+    }
 
+    if (payload.stock !== undefined) {
+        updateData.stock = parseInt(payload.stock as string);
+    }
 
-//     return await prisma.medicine.update({
-//         where: {
-//             id
-//         },
-//         data: payload,
-//     });
-// };
+    const result = await prisma.product.update({
+        where: { id },
+        data: updateData,
+    });
 
-// const deleteMedicineById = async (id: string, userId: string, userRole: string) => {
+    return result;
+};
 
-//     const medicine = await prisma.medicine.findUnique({
-//         where: {
-//             id
-//         },
-//     });
+const deleteProductById = async (id: string) => {
+    const isProductExist = await prisma.product.findUnique({
+        where: { id }
+    });
 
-//     if (!medicine) {
-//         throw new AppError("Medicine not found", 404);
-//     }
+    if (!isProductExist) {
+        throw new AppError("Product not found to delete!", 404);
+    }
 
-//     if (userRole !== 'ADMIN' && medicine.sellerId !== userId) {
-//         throw new AppError("You can only delete your own medicines", 403);
-//     }
+    const result = await prisma.product.delete({
+        where: { id }
+    });
 
-//     return await prisma.medicine.delete({
-//         where: {
-//             id
-//         },
-//     });
-// };
+    return result;
+};
+
+export const productService = {
+    createProduct,
+    getAllProducts,
+    getProductById,
+    updateProductById,
+    deleteProductById
+};
 
 
-// export const medicineService = {
-//     createMedicine,
-//     getAllMedicines,
-//     getMedicineById,
-//     updateMedicineById,
-//     deleteMedicineById,
-// };

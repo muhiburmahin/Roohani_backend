@@ -12,6 +12,7 @@ generator client {
 datasource db {
   provider = "postgresql"
 }
+
 model Category {
   id        String    @id @default(uuid())
   name      String    @unique
@@ -26,51 +27,51 @@ model Product {
   id          String   @id @default(uuid())
   name        String
   description String?
-  sizes       String[] 
+  sizes       String[]
   price       Float
   stock       Int      @default(0)
   imageUrl    String?
 
-  categoryId  String
-  category    Category @relation(fields: [categoryId], references: [id])
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
 
-  orderItems  OrderItem[]
-  
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  orderItems OrderItem[]
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
 
   @@index([name])
 }
 
 model Order {
   id              String      @id @default(uuid())
-  customerName    String
   customerId      String
-  //customer        User        @relation("CustomerOrders", fields: [customerId], references: [id], onDelete: Cascade)
-
+  customer        User        @relation("CustomerOrders", fields: [customerId], references: [id])
+  
   status          OrderStatus @default(PENDING)
   shippingAddress String
-  phone           String?
+  phone           String
   totalAmount     Float
+  
+  
+  transactionId   String?       @unique 
 
   items           OrderItem[]
 
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 }
 
 model OrderItem {
-  id           String  @id @default(uuid())
+  id           String   @id @default(uuid())
   orderId      String
-  order        Order   @relation(fields: [orderId], references: [id], onDelete: Cascade)
-
-  productId    String  
-  product      Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  
+  productId    String
+  product      Product  @relation(fields: [productId], references: [id])
+  
   quantity     Int
-  price        Float
-  selectedSize String? 
-
+  price        Float    
+  selectedSize String?  
   createdAt    DateTime @default(now())
 }
 
@@ -80,4 +81,76 @@ enum OrderStatus {
   SHIPPED
   DELIVERED
   CANCELLED
+}
+
+model User {
+  id            String    @id
+  name          String
+  email         String
+  emailVerified Boolean   @default(false)
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  sessions      Session[]
+  accounts      Account[]
+  orders        Order[]   @relation("CustomerOrders")
+
+  role  String? @default("CUSTOMER")
+  phone String?
+
+  @@unique([email])
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
 }

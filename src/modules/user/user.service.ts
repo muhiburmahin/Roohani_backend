@@ -1,61 +1,61 @@
-import { User } from "../../../generated/prisma/client";
-import { Role } from "../../../generated/prisma/enums";
 import { prisma } from "../../lib/prisma";
 import { AppError } from "../../middleware/appError";
+import { OrderStatus } from "../../../generated/prisma/enums";
+import { Role } from "../../constants/user";
 
+/**
+ * 1. Get Profile Logic
+ */
 const getMyProfile = async (userId: string) => {
     return await prisma.user.findUnique({
-        where: {
-            id: userId
-        },
+        where: { id: userId },
         select: {
             id: true,
             name: true,
             email: true,
             phone: true,
             image: true,
-            role: true
+            role: true,
+            createdAt: true
         }
     });
 };
 
-//Get all users
+/**
+ * 2. Get All Users Logic
+ */
 const getAllUsers = async () => {
     return await prisma.user.findMany({
         select: {
             id: true,
             name: true,
             email: true,
-            phone: true,
             role: true,
-            image: true,
             createdAt: true
         },
-        orderBy: {
-            createdAt: 'desc'
-        }
+        orderBy: { createdAt: 'desc' }
     });
 };
 
+/**
+ * 3. Admin Dashboard Analytics
+ */
 const adminStats = async () => {
     const [
-        totalCount,
+        totalUsers,
         customerCount,
-        sellerCount,
         adminCount,
         totalCategories,
-        totalMedicines,
-        totalReviews,
+        totalProducts,
     ] = await prisma.$transaction([
         prisma.user.count(),
-        prisma.user.count({ where: { role: Role.CUSTOMER } }),
-        prisma.user.count({ where: { role: Role.SELLER } }),
-        prisma.user.count({ where: { role: Role.ADMIN } }),
+        prisma.user.count({ where: { role: Role.admin } }),
+        prisma.user.count({ where: { role: Role.customer } }),
         prisma.category.count(),
-        prisma.medicine.count(),
-        prisma.review.count(),
+        prisma.product.count(),
     ]);
 
+    // Fetch order stats grouped by status
     const orderStats = await prisma.order.groupBy({
         by: ["status"],
         _count: { status: true },
@@ -64,195 +64,130 @@ const adminStats = async () => {
 
     const orderData: any = {
         total: 0,
-        placed: 0,
-        processing: 0,
+        totalRevenue: 0, // মোট কত টাকা ডেলিভারড হয়েছে
+        successOrders: 0, // মোট সফল অর্ডার সংখ্যা
+        pending: 0,
+        confirmed: 0,
         shipped: 0,
         delivered: 0,
         cancelled: 0,
-        placedAmount: 0,
-        processingAmount: 0,
+        pendingAmount: 0,
+        confirmedAmount: 0,
         shippedAmount: 0,
         deliveredAmount: 0,
         cancelledAmount: 0,
     };
 
-    let totalOrders = 0;
+    let totalOrdersCount = 0;
 
     for (const s of orderStats) {
-        const status = s.status.toLowerCase();
-        orderData[status] = s._count.status;
-        orderData[`${status}Amount`] = s._sum.totalAmount || 0;
-        totalOrders += s._count.status;
+        const statusKey = s.status.toLowerCase();
+        const count = s._count.status;
+        const sum = s._sum.totalAmount || 0;
+
+        orderData[statusKey] = count;
+        orderData[`${statusKey}Amount`] = sum;
+        totalOrdersCount += count;
+
+        if (s.status === OrderStatus.DELIVERED) {
+            orderData.totalRevenue = sum;
+            orderData.successOrders = count;
+        }
     }
 
-    orderData.total = totalOrders;
+    orderData.total = totalOrdersCount;
 
     return {
         user: {
-            total: totalCount,
+            total: totalUsers,
             customer: customerCount,
-            seller: sellerCount,
             admin: adminCount,
         },
         category: {
             total: totalCategories,
         },
-        medicine: {
-            total: totalMedicines,
+        product: {
+            total: totalProducts,
         },
         order: orderData,
-        review: {
-            total: totalReviews,
-        },
     };
 };
 
-
-const sellerStats = async () => {
-    const [totalCategories, totalMedicines, totalReviews] =
-        await prisma.$transaction([
-            prisma.category.count(),
-            prisma.medicine.count(),
-            prisma.review.count(),
-        ]);
-
-    const orderStats = await prisma.order.groupBy({
-        by: ["status"],
-        _count: { status: true },
-        _sum: { totalAmount: true },
-    });
-
-    const orderData: any = {
-        total: 0,
-        placed: 0,
-        processing: 0,
-        shipped: 0,
-        delivered: 0,
-        cancelled: 0,
-        placedAmount: 0,
-        processingAmount: 0,
-        shippedAmount: 0,
-        deliveredAmount: 0,
-        cancelledAmount: 0,
-    };
-
-    let totalOrders = 0;
-
-    for (const s of orderStats) {
-        const status = s.status.toLowerCase();
-        orderData[status] = s._count.status;
-        orderData[`${status}Amount`] = s._sum.totalAmount || 0;
-        totalOrders += s._count.status;
-    }
-
-    orderData.total = totalOrders;
-
-    return {
-        category: {
-            total: totalCategories,
-        },
-        medicine: {
-            total: totalMedicines,
-        },
-        order: orderData,
-        review: {
-            total: totalReviews,
-        },
-    };
-};
-
-const customerStats = async (user: Partial<User>) => {
-    if (user.role !== Role.CUSTOMER) {
-        throw new AppError("User is not a customer", 400);
-    }
-
-    if (!user.id) {
-        throw new AppError("User ID is required", 400);
-    }
-
-    const [ordersCount, reviewsCount, amountGroup, countGroup] =
-        await Promise.all([
-            prisma.order.count({
-                where: { customerId: user.id }, // 👈 MUST match model
-            }),
-            prisma.review.count({
-                where: { userId: user.id },
-            }),
-            prisma.order.groupBy({
-                by: ["status"],
-                where: { customerId: user.id },
-                _sum: { totalAmount: true },
-            }),
-            prisma.order.groupBy({
-                by: ["status"],
-                where: { customerId: user.id },
-                _count: { _all: true },
-            }),
-        ]);
+/**
+ * 2. Customer Specific Analytics
+ */
+const customerStats = async (userId: string) => {
+    const [ordersCount, statusGroups] = await Promise.all([
+        prisma.order.count({
+            where: { customerId: userId },
+        }),
+        prisma.order.groupBy({
+            by: ["status"],
+            where: { customerId: userId },
+            _sum: { totalAmount: true },
+            _count: { id: true },
+        }),
+    ]);
 
     const statuses = [
-        "PLACED",
-        "PROCESSING",
+        "PENDING",
+        "CONFIRMED",
         "SHIPPED",
         "DELIVERED",
         "CANCELLED",
     ] as const;
 
+    // Fixed 'o' implicit any error by defining logic clearly
     const orderAmountByStatus = Object.fromEntries(
-        statuses.map((status) => [
-            status,
-            amountGroup.find((o) => o.status === status)?._sum.totalAmount ?? 0,
-        ]),
+        statuses.map((status) => {
+            const group = statusGroups.find((g) => g.status === status);
+            return [status, group?._sum.totalAmount ?? 0];
+        })
     );
 
     const orderCountByStatus = Object.fromEntries(
-        statuses.map((status) => [
-            status,
-            countGroup.find((o) => o.status === status)?._count._all ?? 0,
-        ]),
+        statuses.map((status) => {
+            const group = statusGroups.find((g) => g.status === status);
+            return [status, group?._count.id ?? 0];
+        })
     );
+
+    const totalSpent = statusGroups.find((g) => g.status === "DELIVERED")?._sum.totalAmount ?? 0;
 
     return {
         ordersCount,
-        reviewsCount,
+        totalSpent,
         orderCountByStatus,
         orderAmountByStatus,
     };
 };
 
-const updateProfile = async (userId: string, payload: any) => {
-    const isUserExist = await prisma.user.findUnique({
-        where: {
-            id: userId
-        }
-    });
+/**
+ * 5. Update Profile Logic
+ */
+const updateProfile = async (id: string, payload: any) => {
+    const userExists = await prisma.user.findUnique({ where: { id } });
 
-    if (!isUserExist) {
-        throw new AppError("User not found!", 404);
+    if (!userExists) {
+        throw new AppError("User not found", 404);
     }
 
     return await prisma.user.update({
-        where: { id: userId },
+        where: { id },
         data: payload,
         select: {
             id: true,
             name: true,
             email: true,
-            phone: true,
-            image: true,
-            role: true
+            phone: true
         }
     });
 };
-
 
 export const userService = {
     getMyProfile,
     getAllUsers,
     adminStats,
-    sellerStats,
     customerStats,
-    updateProfile,
-
-
+    updateProfile
 };
