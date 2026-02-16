@@ -19,21 +19,25 @@ const app = express();
 
 app.use(cors({
     origin: function (origin, callback) {
-        const allowedOrigins = [process.env.APP_URL, "http://localhost:3000"];
 
-        if (!origin) return callback(null, true);
+        const allowedOrigins = [
+            process.env.APP_URL,
+            "http://localhost:3000",
+            "http://localhost:5000" // ✅ add this
+        ];
 
-        if (allowedOrigins.includes(origin)) {
-            return callback(null, true);
+        if (!origin || allowedOrigins.includes(origin)) {
+            callback(null, true);
+        } else {
+            callback(new Error("The CORS policy for this site does not allow access from the specified Origin."));
         }
-        const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-        return callback(new Error(msg), false);
     },
     credentials: true,
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization', 'Cookie'],
-    exposedHeaders: ['Set-Cookie']
-}))
+    methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization", "Cookie"],
+    exposedHeaders: ["Set-Cookie"]
+}));
+
 
 app.use(express.json());
 app.all("/api/auth/*splat", toNodeHandler(auth));
