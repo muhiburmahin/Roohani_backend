@@ -1,0 +1,161 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+
+model Category {
+  id        String    @id @default(uuid())
+  name      String    @unique
+  products  Product[]
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  @@index([name])
+}
+
+model Product {
+  id            String      @id @default(uuid())
+  name          String
+  description   String?
+  variantType   String      // 'SIZE' or 'VOLUME'
+  sizes         String[]    // ['S', 'M', 'L'] or ['50ml', '100ml']
+  
+  // ডাইনামিক প্রাইস স্টোর করার জন্য JSON ফিল্ড
+  // ডাটা ফরম্যাট: { "50ml": 1000, "100ml": 1800 }
+  variantPrices Json?       @default("{}") 
+  
+  basePrice     Float       
+  stock         Int         @default(0)
+  images        String[]    
+  
+  categoryId    String
+  category      Category    @relation(fields: [categoryId], references: [id])
+  isDeleted   Boolean  @default(false)
+  orderItems    OrderItem[]
+  createdAt     DateTime    @default(now())
+  updatedAt     DateTime    @updatedAt
+
+  @@index([name])
+}
+
+model Order {
+  id              String      @id @default(uuid())
+  customerId      String
+  customer        User        @relation("CustomerOrders", fields: [customerId], references: [id])
+  
+  status          OrderStatus @default(PENDING)
+  shippingAddress String
+  phone           String
+  totalAmount     Float
+  transactionId   String?       @unique 
+  items           OrderItem[]
+
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+}
+
+model OrderItem {
+  id           String   @id @default(uuid())
+  orderId      String
+  order        Order    @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  productId    String?  // এখানে String কে String? (Optional) করে দিন ✅
+  product      Product? @relation(fields: [productId], references: [id], onDelete: SetNull) // onDelete: SetNull যোগ করুন ✅
+  quantity     Int
+  price        Float    
+  selectedSize String?  
+  createdAt    DateTime @default(now())
+}
+
+enum OrderStatus {
+  PENDING
+  CONFIRMED
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String
+  email         String    @unique 
+  emailVerified Boolean   @default(false)
+  
+  username      String    @unique // এখানে আমরা ইউজারের ফোন নম্বরটিই রাখব
+  phone         String    @unique // সেফটির জন্য আলাদা কলামেও ফোন নম্বর রাখব
+  
+  image         String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  
+  sessions      Session[]
+  accounts      Account[]
+  orders        Order[]   @relation("CustomerOrders")
+
+  role Role @default(CUSTOMER)
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([token])
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+enum Role {
+  CUSTOMER
+  ADMIN
+}
